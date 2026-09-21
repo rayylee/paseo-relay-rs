@@ -26,17 +26,20 @@ WebSocket 端点：`GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 
 ## Web UI
 
-未配置时，中继会在 `/` 提供一个小的内嵌调试控制台：解析 `#offer` 片段、以
-`role=client` 连接中继自身的 `/ws` 端点、在浏览器内完成 Paseo E2EE 握手
-（NaCl box），并提供用于 `session` 消息的 JSON 控制台。可以直接打开 offer 链接：
+中继二进制内嵌了构建好的 Paseo Web App（保存在 `web-ui/` 目录中），并以
+SPA fallback 方式在 `/` 提供，因此分发时只需一个二进制文件。可以直接打开
+offer 链接：
 
 ```text
 http://<中继地址>/#offer=<base64-offer>
 ```
 
-若要改为提供完整的 Paseo Web App，请先构建它（`expo export --platform web`），
-并把 `PASEO_RELAY_WEB_UI_DIR` 指向导出目录；中继随后会在 `/` 以 SPA fallback
-方式提供该目录，替换内嵌控制台。
+要从相邻的 `../paseo` 检出刷新内嵌应用，请运行 `scripts/vendor-web-ui.sh`
+（或将导出目录作为参数传入），然后重新构建。
+
+设置 `PASEO_RELAY_DEBUG=true` 可在 `/debug` 启用一个小的内嵌调试配对控制台：
+解析 `#offer` 片段、以 `role=client` 连接中继的 `/ws` 端点，并在浏览器内完成
+Paseo E2EE 握手（NaCl box）。
 
 ## 配置
 
@@ -56,7 +59,7 @@ http://<中继地址>/#offer=<base64-offer>
 | `PASEO_RELAY_DATA_ATTACH_TIMEOUT_MS` | `15000` | 客户端帧等待数据 socket 的时长 |
 | `PASEO_RELAY_TCP_RECEIVE_BUFFER_BYTES` | `65536` | 监听器的接收缓冲区 |
 | `PASEO_RELAY_MEMORY_WATERMARK_BYTES` | `0` | 用于分流（shedding）的 RSS 水位线（0 = 禁用） |
-| `PASEO_RELAY_WEB_UI_DIR` | _（未设置）_ | 要在 `/` 提供服务的已构建 Web UI 目录（SPA fallback）；未设置时提供内嵌调试控制台 |
+| `PASEO_RELAY_DEBUG` | `false` | 是否在 `/debug` 提供内嵌调试配对控制台 |
 
 ## 架构
 

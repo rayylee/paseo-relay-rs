@@ -76,8 +76,9 @@ async fn metrics_exposes_expected_series() {
 }
 
 #[tokio::test]
-async fn unknown_path_returns_404() {
+async fn unknown_path_serves_embedded_spa() {
     let relay = start_relay().await;
-    let (status, _body) = http_get(&relay, "/nope").await;
-    assert_eq!(status, 404);
+    let (status, body) = http_get(&relay, "/nope").await;
+    assert_eq!(status, 200);
+    assert!(body.contains("<!DOCTYPE html") || body.contains("<!doctype html"));
 }

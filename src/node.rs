@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,7 +11,6 @@ use axum::Router;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tower_http::services::{ServeDir, ServeFile};
 
 use crate::capacity::{self, CapacityConfig, CapacityHandle, MemoryProbe};
 use crate::config::Config;
@@ -133,16 +131,15 @@ async fn supervisor_loop(
             .route("/ws", any(ws_handler))
             .with_state(state.clone());
 
-        if let Some(dir) = web_ui_dir(&options.config) {
-            let index = dir.join("index.html");
+        // The debug pairing console is opt-in; disabled requests fall through
+        // to the web UI fallback below instead of serving the console.
+        if options.config.debug {
             router = router
-                .fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)));
-        } else {
-            router = router
-                .route("/", get(web::index))
-                .route("/static/nacl-fast.js", get(web::nacl_fast))
-                .fallback(operations::not_found);
+                .route("/debug", get(web::index))
+                .route("/debug/static/nacl-fast.js", get(web::nacl_fast));
         }
+
+        router = router.fallback(web::web_ui);
 
         let serve_cancel = generation_cancel.clone();
         let listener_done = tokio::spawn(async move {
@@ -184,11 +181,6 @@ async fn supervisor_loop(
         capacity_done = next_done;
         let _ = state_tx.send(state.clone());
     }
-}
-
-fn web_ui_dir(config: &Config) -> Option<PathBuf> {
-    let dir = config.web_ui_dir.as_ref()?;
-    dir.join("index.html").is_file().then(|| dir.clone())
 }
 
 fn configure_listener(listener: &TcpListener, config: &Config) {

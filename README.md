@@ -27,18 +27,22 @@ Operations: `GET /health`, `GET /ready`, `GET /metrics` (Prometheus text).
 
 ## Web UI
 
-Without configuration the relay serves a small embedded debug console at `/`
-that parses the `#offer` fragment, connects to the relay's own `/ws` endpoint as
-a `role=client`, performs the Paseo E2EE handshake in the browser (NaCl box),
-and offers a JSON console for `session` messages. Open an offer link directly:
+The relay binary embeds the built Paseo web app (vendored under `web-ui/`) and
+serves it at `/` with SPA fallback, so distribution stays a single binary. Open
+an offer link directly:
 
 ```text
 http://<relay-host>/#offer=<base64-offer>
 ```
 
-To serve the full Paseo web app instead, build it (`expo export --platform web`)
-and set `PASEO_RELAY_WEB_UI_DIR` to the export directory; the relay then serves
-that directory with SPA fallback at `/`, replacing the embedded console.
+To refresh the embedded app from a sibling `../paseo` checkout, run
+`scripts/vendor-web-ui.sh` (or pass the export directory as an argument), then
+rebuild.
+
+An embedded debug pairing console can be enabled at `/debug` by setting
+`PASEO_RELAY_DEBUG=true`; it parses the `#offer` fragment, connects to the
+relay's `/ws` endpoint as a `role=client`, and performs the Paseo E2EE
+handshake (NaCl box).
 
 ## Configuration
 
@@ -58,7 +62,7 @@ that directory with SPA fallback at `/`, replacing the embedded console.
 | `PASEO_RELAY_DATA_ATTACH_TIMEOUT_MS` | `15000` | Client-frame wait for a data socket |
 | `PASEO_RELAY_TCP_RECEIVE_BUFFER_BYTES` | `65536` | Listener receive buffer |
 | `PASEO_RELAY_MEMORY_WATERMARK_BYTES` | `0` | RSS watermark for shedding (0 = disabled) |
-| `PASEO_RELAY_WEB_UI_DIR` | _(unset)_ | Directory of a built web UI to serve at `/` (SPA fallback); unset serves the embedded debug console |
+| `PASEO_RELAY_DEBUG` | `false` | Serve the embedded debug pairing console at `/debug` |
 
 ## Architecture
 
