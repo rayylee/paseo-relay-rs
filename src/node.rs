@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,6 +12,7 @@ use axum::Router;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::capacity::{self, CapacityConfig, CapacityHandle, MemoryProbe};
 use crate::config::Config;
@@ -20,6 +22,7 @@ use crate::metrics::Metrics;
 use crate::operations;
 use crate::ownership::{Ownership, RouteResult};
 use crate::socket::{self, Attached};
+use crate::web;
 
 pub struct AppState {
     pub config: Arc<Config>,
@@ -123,13 +126,23 @@ async fn supervisor_loop(
     mut capacity_done: tokio::task::JoinHandle<()>,
 ) {
     loop {
-        let router = Router::new()
+        let mut router = Router::new()
             .route("/health", get(operations::health))
             .route("/ready", get(operations::ready))
             .route("/metrics", get(operations::metrics))
             .route("/ws", any(ws_handler))
-            .fallback(operations::not_found)
             .with_state(state.clone());
+
+        if let Some(dir) = web_ui_dir(&options.config) {
+            let index = dir.join("index.html");
+            router = router
+                .fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)));
+        } else {
+            router = router
+                .route("/", get(web::index))
+                .route("/static/nacl-fast.js", get(web::nacl_fast))
+                .fallback(operations::not_found);
+        }
 
         let serve_cancel = generation_cancel.clone();
         let listener_done = tokio::spawn(async move {
@@ -171,6 +184,11 @@ async fn supervisor_loop(
         capacity_done = next_done;
         let _ = state_tx.send(state.clone());
     }
+}
+
+fn web_ui_dir(config: &Config) -> Option<PathBuf> {
+    let dir = config.web_ui_dir.as_ref()?;
+    dir.join("index.html").is_file().then(|| dir.clone())
 }
 
 fn configure_listener(listener: &TcpListener, config: &Config) {

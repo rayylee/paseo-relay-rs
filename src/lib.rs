@@ -10,6 +10,7 @@ pub mod operations;
 pub mod ownership;
 pub mod protocol;
 pub mod socket;
+pub mod web;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

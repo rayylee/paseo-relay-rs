@@ -24,6 +24,20 @@ PASEO_RELAY_PORT=4000 ./target/release/paseo-relay
 WebSocket 端点：`GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 运维端点：`GET /health`、`GET /ready`、`GET /metrics`（Prometheus 文本格式）。
 
+## Web UI
+
+未配置时，中继会在 `/` 提供一个小的内嵌调试控制台：解析 `#offer` 片段、以
+`role=client` 连接中继自身的 `/ws` 端点、在浏览器内完成 Paseo E2EE 握手
+（NaCl box），并提供用于 `session` 消息的 JSON 控制台。可以直接打开 offer 链接：
+
+```text
+http://<中继地址>/#offer=<base64-offer>
+```
+
+若要改为提供完整的 Paseo Web App，请先构建它（`expo export --platform web`），
+并把 `PASEO_RELAY_WEB_UI_DIR` 指向导出目录；中继随后会在 `/` 以 SPA fallback
+方式提供该目录，替换内嵌控制台。
+
 ## 配置
 
 | 环境变量 | 默认值 | 含义 |
@@ -42,6 +56,7 @@ WebSocket 端点：`GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 | `PASEO_RELAY_DATA_ATTACH_TIMEOUT_MS` | `15000` | 客户端帧等待数据 socket 的时长 |
 | `PASEO_RELAY_TCP_RECEIVE_BUFFER_BYTES` | `65536` | 监听器的接收缓冲区 |
 | `PASEO_RELAY_MEMORY_WATERMARK_BYTES` | `0` | 用于分流（shedding）的 RSS 水位线（0 = 禁用） |
+| `PASEO_RELAY_WEB_UI_DIR` | _（未设置）_ | 要在 `/` 提供服务的已构建 Web UI 目录（SPA fallback）；未设置时提供内嵌调试控制台 |
 
 ## 架构
 

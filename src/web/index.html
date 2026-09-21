@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paseo Relay Console</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1419;
+    --panel: #1a2027;
+    --border: #2a323b;
+    --text: #d7e0e8;
+    --muted: #8a97a5;
+    --accent: #4f9dff;
+    --ok: #3fb96f;
+    --err: #e05c5c;
+    --warn: #d9a13c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 6px; font-size: 18px; }
+  header p { margin: 0; color: var(--muted); font-size: 12px; word-break: break-all; }
+  main { padding: 20px; max-width: 900px; margin: 0 auto; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  #status { font-size: 14px; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+  #status.connecting { color: var(--warn); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  button {
+    font: inherit;
+    color: var(--text);
+    background: #242c35;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #173a5e; border-color: var(--accent); }
+  textarea {
+    width: 100%;
+    min-height: 72px;
+    font: inherit;
+    color: var(--text);
+    background: #0c1116;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    resize: vertical;
+    margin-bottom: 10px;
+  }
+  #log {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    color: var(--text);
+    max-height: 420px;
+    overflow-y: auto;
+  }
+  .log-meta { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Paseo Relay Console</h1>
+  <p id="offer-info">正在解析 URL 中的 #offer 片段…</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>连接状态</h2>
+    <div id="status" class="connecting">初始化…</div>
+  </section>
+  <section class="panel">
+    <h2>发送 session 消息（端到端加密）</h2>
+    <div class="row">
+      <button data-tpl="agents">fetch_agents</button>
+      <button data-tpl="providers">get_providers_snapshot</button>
+      <button data-tpl="config">get_daemon_config</button>
+      <button data-tpl="heartbeat">heartbeat</button>
+    </div>
+    <textarea id="out" spellcheck="false">{"type":"session","message":{"type":"fetch_agents_request","requestId":"REPLACE_ME","subscribe":{"subscriptionId":"sub-1"}}}</textarea>
+    <button id="send" class="primary">Send</button>
+  </section>
+  <section class="panel">
+    <h2>消息日志</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script src="/static/nacl-fast.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var offer = null;
+  var ws = null;
+  var keyPair = null;
+  var sharedKey = null;
+  var open = false;
+  var binaryCiphertext = false;
+  var helloTimer = null;
+  var heartbeatTimer = null;
+  var pending = [];
+
+  function $(id) { return document.getElementById(id); }
+
+  function statusEl() { return $('status'); }
+  function logEl() { return $('log'); }
+
+  function setStatus(cls, text) {
+    var el = statusEl();
+    el.className = cls;
+    el.textContent = text;
+  }
+
+  function log(text) {
+    var el = logEl();
+    var ts = new Date().toISOString().slice(11, 19);
+    el.textContent += '[' + ts + '] ' + text + '\n';
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function pretty(text) {
+    try { return JSON.stringify(JSON.parse(text), null, 2); } catch (e) { return text; }
+  }
+
+  function randomId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      try { return crypto.randomUUID(); } catch (e) {}
+    }
+    return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+  }
+
+  // ---- base64 helpers (standard padded base64; url-safe tolerant on decode) ----
+
+  function bytesToB64(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  }
+
+  function normalizeB64(text) {
+    var t = String(text).trim().replace(/-/g, '+').replace(/_/g, '/');
+    var pad = (4 - (t.length % 4)) % 4;
+    return t + new Array(pad + 1).join('=');
+  }
+
+  function b64ToBytes(text) {
+    var bin = atob(normalizeB64(text));
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function b64ToArrayBuffer(text) {
+    return b64ToBytes(text).buffer;
+  }
+
+  // ---- E2EE (port of @getpaseo/relay/e2ee client path, NaCl box) ----
+
+  function deriveSharedKey(secretKey, peerPublicKey) {
+    var raw = nacl.scalarMult(secretKey, peerPublicKey);
+    var zeros = new Uint8Array(nacl.box.sharedKeyLength);
+    var allZero = nacl.verify(raw, zeros);
+    raw.fill(0);
+    if (allZero) throw new Error('Invalid peer public key');
+    return nacl.box.before(peerPublicKey, secretKey);
+  }
+
+  function encrypt(shared, data) {
+    var nonce = nacl.randomBytes(nacl.box.nonceLength);
+    var plaintext = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+    var cipher = nacl.box.after(plaintext, nonce, shared);
+    var out = new Uint8Array(nonce.length + cipher.length);
+    out.set(nonce, 0);
+    out.set(cipher, nonce.length);
+    return out.buffer;
+  }
+
+  function decrypt(shared, buffer) {
+    var bytes = new Uint8Array(buffer);
+    if (bytes.length < nacl.box.nonceLength) throw new Error('Ciphertext bundle too short');
+    var nonce = bytes.slice(0, nacl.box.nonceLength);
+    var cipher = bytes.slice(nacl.box.nonceLength);
+    var opened = nacl.box.open.after(cipher, nonce, shared);
+    if (!opened) throw new Error('Decryption failed');
+    return opened.buffer;
+  }
+
+  // ---- offer parsing ----
+
+  function parseOffer() {
+    var m = location.hash.match(/^#?offer=([^&]+)/i);
+    if (!m) return null;
+    var raw = m[1];
+    try { raw = decodeURIComponent(raw); } catch (e) {}
+    var json;
+    try {
+      json = JSON.parse(new TextDecoder().decode(b64ToArrayBuffer(raw)));
+    } catch (e) {
+      return null;
+    }
+    if (!json || json.v !== 2 || !json.serverId || !json.daemonPublicKeyB64 ||
+        !json.relay || !json.relay.endpoint) {
+      return null;
+    }
+    return json;
+  }
+
+  // ---- websocket + handshake ----
+
+  function connect() {
+    offer = parseOffer();
+    if (!offer) {
+      $('offer-info').textContent = 'URL 中没有可用的 #offer 片段。请使用形如 /#offer=<base64> 的链接打开本页面。';
+      setStatus('err', '未找到 #offer 片段');
+      return;
+    }
+    $('offer-info').textContent = 'serverId=' + offer.serverId + ' · relay=' + offer.relay.endpoint +
+      (offer.relay.useTls ? ' (TLS)' : '') + ' · daemonKey=' + offer.daemonPublicKeyB64;
+
+    var scheme = offer.relay.useTls ? 'wss://' : 'ws://';
+    var url = scheme + offer.relay.endpoint + '/ws?serverId=' + encodeURIComponent(offer.serverId) + '&role=client&v=2';
+    log('连接 ' + url);
+
+    ws = new WebSocket(url);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = onWsOpen;
+    ws.onmessage = onWsMessage;
+    ws.onclose = onWsClose;
+    ws.onerror = onWsError;
+  }
+
+  function onWsOpen() {
+    setStatus('connecting', 'WebSocket 已连接，正在 E2EE 握手…');
+    try {
+      keyPair = nacl.box.keyPair();
+      sharedKey = deriveSharedKey(keyPair.secretKey, b64ToBytes(offer.daemonPublicKeyB64));
+    } catch (e) {
+      setStatus('err', '密钥初始化失败: ' + e.message);
+      return;
+    }
+    sendHello();
+    helloTimer = setInterval(sendHello, 1000);
+  }
+
+  function sendHello() {
+    if (open || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({
+        type: 'e2ee_hello',
+        key: bytesToB64(keyPair.publicKey),
+        capabilities: { binaryCiphertext: true }
+      }));
+    } catch (e) {
+      log('发送 hello 失败: ' + e.message);
+    }
+  }
+
+  function onWsMessage(ev) {
+    if (!open) {
+      if (typeof ev.data === 'string') {
+        var msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (msg && msg.type === 'e2ee_ready') openChannel(msg);
+      }
+      return;
+    }
+    handleCiphertext(ev.data);
+  }
+
+  function openChannel(ready) {
+    binaryCiphertext = !!(ready.capabilities && ready.capabilities.binaryCiphertext);
+    open = true;
+    if (helloTimer) { clearInterval(helloTimer); helloTimer = null; }
+    setStatus('ok', 'E2EE 通道已建立' + (binaryCiphertext ? '（binaryCiphertext）' : ''));
+    log('E2EE 通道已建立，可以发送 session 消息');
+    for (var i = 0; i < pending.length; i++) sendEncrypted(pending[i]);
+    pending = [];
+    startHeartbeat();
+  }
+
+  function handleCiphertext(data) {
+    var bytes;
+    if (binaryCiphertext) {
+      bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(b64ToArrayBuffer(data));
+    } else {
+      bytes = new Uint8Array(b64ToArrayBuffer(data));
+    }
+    var plain;
+    try {
+      plain = decrypt(sharedKey, bytes.buffer);
+    } catch (e) {
+      log('解密失败: ' + e.message);
+      return;
+    }
+    renderPlaintext(plain);
+  }
+
+  function renderPlaintext(buf) {
+    var text = null;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) {}
+    if (text !== null) {
+      log('↓ ' + pretty(text));
+    } else {
+      log('↓ [binary ' + buf.byteLength + ' bytes] ' + bytesToB64(new Uint8Array(buf)));
+    }
+  }
+
+  function sendEncrypted(data) {
+    var cipher = encrypt(sharedKey, data);
+    if (binaryCiphertext && data instanceof ArrayBuffer) ws.send(cipher);
+    else ws.send(bytesToB64(new Uint8Array(cipher)));
+  }
+
+  function send(data) {
+    if (!open) { pending.push(data); return; }
+    try {
+      sendEncrypted(data);
+    } catch (e) {
+      log('发送失败: ' + e.message);
+    }
+  }
+
+  function onWsClose(ev) {
+    open = false;
+    if (helloTimer) { clearInterval(helloTimer); helloTimer = null; }
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    setStatus('err', '连接已关闭（code=' + ev.code + '）: ' + (ev.reason || ''));
+    log('连接已关闭 code=' + ev.code + ' reason=' + (ev.reason || ''));
+  }
+
+  function onWsError() {
+    setStatus('err', 'WebSocket 错误');
+  }
+
+  // ---- console ----
+
+  function startHeartbeat() {
+    if (heartbeatTimer) return;
+    heartbeatTimer = setInterval(function () {
+      var msg = {
+        type: 'client_heartbeat',
+        deviceType: 'web',
+        focusedAgentId: null,
+        focusedTerminalId: null,
+        lastActivityAt: new Date().toISOString(),
+        appVisible: true
+      };
+      send(JSON.stringify(msg));
+    }, 30000);
+  }
+
+  function makeRequest(type, extra) {
+    var msg = { type: type, requestId: randomId() };
+    if (extra) for (var k in extra) msg[k] = extra[k];
+    return { type: 'session', message: msg };
+  }
+
+  function template(name) {
+    switch (name) {
+      case 'agents':
+        return JSON.stringify(makeRequest('fetch_agents_request', { subscribe: { subscriptionId: 'sub-1' } }));
+      case 'providers':
+        return JSON.stringify(makeRequest('get_providers_snapshot_request', { cwd: '/' }));
+      case 'config':
+        return JSON.stringify(makeRequest('get_daemon_config_request'));
+      case 'heartbeat':
+        return JSON.stringify({
+          type: 'session',
+          message: {
+            type: 'client_heartbeat',
+            deviceType: 'web',
+            focusedAgentId: null,
+            focusedTerminalId: null,
+            lastActivityAt: new Date().toISOString(),
+            appVisible: true
+          }
+        });
+    }
+    return '';
+  }
+
+  function sendConsole() {
+    var raw = $('out').value.trim();
+    if (!raw) return;
+    try { JSON.parse(raw); } catch (e) { log('↑ 发送原始文本（非法 JSON）'); }
+    log('↑ ' + pretty(raw));
+    send(raw);
+  }
+
+  document.querySelectorAll('[data-tpl]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      $('out').value = template(btn.getAttribute('data-tpl'));
+    });
+  });
+  $('send').addEventListener('click', sendConsole);
+
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::path::PathBuf;
 
 use crate::protocol;
 
@@ -19,6 +20,7 @@ pub struct Config {
     pub data_attach_timeout_ms: u64,
     pub tcp_receive_buffer_bytes: usize,
     pub memory_watermark_bytes: usize,
+    pub web_ui_dir: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -38,6 +40,7 @@ impl Default for Config {
             data_attach_timeout_ms: 15_000,
             tcp_receive_buffer_bytes: 64 * 1024,
             memory_watermark_bytes: 0,
+            web_ui_dir: None,
         }
     }
 }
@@ -140,6 +143,11 @@ impl Config {
                 256 * 1024 * 1024,
                 64 * 1024 * 1024 * 1024,
             )? as usize,
+            web_ui_dir: match environment.get("PASEO_RELAY_WEB_UI_DIR") {
+                None => None,
+                Some(value) if value.trim().is_empty() => None,
+                Some(value) => Some(PathBuf::from(value)),
+            },
         };
 
         validate_ingress_budget(config.ingress_budget_bytes, config.ingress_weight)?;
