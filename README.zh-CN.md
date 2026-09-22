@@ -34,8 +34,14 @@ offer 链接：
 http://<中继地址>/#offer=<base64-offer>
 ```
 
-要从相邻的 `../paseo` 检出刷新内嵌应用，请运行 `scripts/vendor-web-ui.sh`
-（或将导出目录作为参数传入），然后重新构建。
+要刷新内嵌应用，请运行 `scripts/vendor-web-ui.sh`（或将导出目录作为参数传入），
+然后重新构建。脚本默认从 `vendor/paseo` 子模块读取应用导出，若该处没有构建产物，则回退到
+已构建的相邻 `../paseo` 检出。
+
+`vendor/paseo` 子模块固定在 `v0.8.0` 这个 tag（提交 `b8e2467`）。克隆本项目时
+请加 `--recurse-submodules`，或执行 `git submodule update --init vendor/paseo`。要更新版本，
+在子模块里检出新的 tag 并提交生成的 gitlink；`git submodule update --remote` 走的是
+默认分支，不是这个 pin。
 
 设置 `PASEO_RELAY_DEBUG=true` 可在 `/debug` 启用一个小的内嵌调试配对控制台：
 从 `#offer` 片段或直接粘贴的配对链接读取 offer，以 `role=client` 连接中继的

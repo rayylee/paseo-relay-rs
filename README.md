@@ -35,9 +35,15 @@ an offer link directly:
 http://<relay-host>/#offer=<base64-offer>
 ```
 
-To refresh the embedded app from a sibling `../paseo` checkout, run
-`scripts/vendor-web-ui.sh` (or pass the export directory as an argument), then
-rebuild.
+To refresh the embedded app, run `scripts/vendor-web-ui.sh` (or pass the export
+directory as an argument), then rebuild. The script reads the app export from the
+`vendor/paseo` submodule, falling back to a prebuilt sibling `../paseo` checkout.
+
+The `vendor/paseo` submodule is pinned to tag `v0.8.0` (commit `b8e2467`). Clone
+the project with `--recurse-submodules`, or run
+`git submodule update --init vendor/paseo`.
+Checking out a different tag there and committing the resulting gitlink is how the
+pin moves; `git submodule update --remote` follows the default branch instead.
 
 An embedded debug pairing console can be enabled at `/debug` by setting
 `PASEO_RELAY_DEBUG=true`; it takes the offer from the `#offer` fragment or from a
