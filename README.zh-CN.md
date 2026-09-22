@@ -38,8 +38,11 @@ http://<中继地址>/#offer=<base64-offer>
 （或将导出目录作为参数传入），然后重新构建。
 
 设置 `PASEO_RELAY_DEBUG=true` 可在 `/debug` 启用一个小的内嵌调试配对控制台：
-解析 `#offer` 片段、以 `role=client` 连接中继的 `/ws` 端点，并在浏览器内完成
-Paseo E2EE 握手（NaCl box）。
+从 `#offer` 片段或直接粘贴的配对链接读取 offer，以 `role=client` 连接中继的
+`/ws` 端点，并在浏览器内完成 Paseo E2EE 握手（NaCl box）。握手后它会补上 daemon
+要求的客户端 `hello`，并提供 `fetch_agents`、`get_providers_snapshot`、
+`get_daemon_config`、`ping`、`heartbeat` 几个按钮。`client_heartbeat` 是单向的，
+只有 `ping` 会收到应答。
 
 ## 配置
 

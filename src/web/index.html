@@ -40,6 +40,8 @@
     margin-bottom: 16px;
   }
   .panel h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .panel-head h2 { margin: 0; }
   #status { font-size: 14px; }
   #status.ok { color: var(--ok); }
   #status.err { color: var(--err); }
@@ -68,13 +70,31 @@
     resize: vertical;
     margin-bottom: 10px;
   }
+  input[type="text"] {
+    flex: 1 1 320px;
+    min-width: 220px;
+    font: inherit;
+    color: var(--text);
+    background: #0c1116;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  .hint { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+  .hint code { color: var(--text); }
   #log {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
+    width: 100%;
+    min-height: 240px;
+    max-height: 420px;
+    resize: vertical;
+    font: inherit;
     font-size: 12px;
     color: var(--text);
-    max-height: 420px;
+    background: #0c1116;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    white-space: pre-wrap;
     overflow-y: auto;
   }
   .log-meta { color: var(--muted); }
@@ -91,19 +111,33 @@
     <div id="status" class="connecting">初始化…</div>
   </section>
   <section class="panel">
+    <h2>配对 offer</h2>
+    <p class="hint">把配对链接粘到下面即可连接：整条链接、<code>#offer=</code> 之后的 base64 片段或裸 base64 都可以。</p>
+    <div class="row">
+      <input id="offer-input" type="text" spellcheck="false" autocomplete="off"
+             placeholder="http://rcore-os.org.cn/#offer=… 或 base64 片段">
+      <button id="offer-connect" class="primary">连接</button>
+    </div>
+  </section>
+  <section class="panel">
     <h2>发送 session 消息（端到端加密）</h2>
     <div class="row">
       <button data-tpl="agents">fetch_agents</button>
       <button data-tpl="providers">get_providers_snapshot</button>
       <button data-tpl="config">get_daemon_config</button>
+      <button data-tpl="ping">ping</button>
       <button data-tpl="heartbeat">heartbeat</button>
     </div>
+    <p class="hint">点击按钮会填入并立即发送下面的 JSON（也可以自己改完再点 Send）。heartbeat 是单向心跳，daemon 不回包；需要往返应答请用 ping。</p>
     <textarea id="out" spellcheck="false">{"type":"session","message":{"type":"fetch_agents_request","requestId":"REPLACE_ME","subscribe":{"subscriptionId":"sub-1"}}}</textarea>
     <button id="send" class="primary">Send</button>
   </section>
   <section class="panel">
-    <h2>消息日志</h2>
-    <pre id="log"></pre>
+    <div class="panel-head">
+      <h2>消息日志</h2>
+      <button id="clear-log">清空</button>
+    </div>
+    <textarea id="log" spellcheck="false" aria-label="消息日志"></textarea>
   </section>
 </main>
 <script src="/debug/static/nacl-fast.js"></script>
@@ -120,6 +154,7 @@
   var helloTimer = null;
   var heartbeatTimer = null;
   var pending = [];
+  var clientId = 'debug-' + randomId();
 
   function $(id) { return document.getElementById(id); }
 
@@ -135,8 +170,10 @@
   function log(text) {
     var el = logEl();
     var ts = new Date().toISOString().slice(11, 19);
-    el.textContent += '[' + ts + '] ' + text + '\n';
-    el.scrollTop = el.scrollHeight;
+    // Leave the viewport alone while the log is scrolled up for reading or copying.
+    var atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    el.value += '[' + ts + '] ' + text + '\n';
+    if (atBottom) el.scrollTop = el.scrollHeight;
   }
 
   function pretty(text) {
@@ -203,19 +240,24 @@
     var cipher = bytes.slice(nacl.box.nonceLength);
     var opened = nacl.box.open.after(cipher, nonce, shared);
     if (!opened) throw new Error('Decryption failed');
-    return opened.buffer;
+    // tweetnacl returns a view whose byteOffset skips its internal zero padding,
+    // so return the view itself instead of its longer backing buffer.
+    return opened;
   }
 
   // ---- offer parsing ----
 
-  function parseOffer() {
-    var m = location.hash.match(/^#?offer=([^&]+)/i);
-    if (!m) return null;
-    var raw = m[1];
-    try { raw = decodeURIComponent(raw); } catch (e) {}
+  // Accepts a full pairing link, an "offer=…" fragment or the bare base64 payload.
+  function decodeOffer(raw) {
+    var text = String(raw == null ? '' : raw).trim();
+    var idx = text.indexOf('offer=');
+    if (idx !== -1) text = text.slice(idx + 'offer='.length);
+    text = text.split('&')[0].split('#')[0].trim();
+    if (!text) return null;
+    try { text = decodeURIComponent(text); } catch (e) {}
     var json;
     try {
-      json = JSON.parse(new TextDecoder().decode(b64ToArrayBuffer(raw)));
+      json = JSON.parse(new TextDecoder().decode(b64ToArrayBuffer(text)));
     } catch (e) {
       return null;
     }
@@ -226,15 +268,33 @@
     return json;
   }
 
+  function offerFromLocation() {
+    return decodeOffer(location.hash) || decodeOffer(location.search);
+  }
+
   // ---- websocket + handshake ----
 
   function connect() {
-    offer = parseOffer();
-    if (!offer) {
-      $('offer-info').textContent = 'URL 中没有可用的 #offer 片段。请使用形如 /#offer=<base64> 的链接打开本页面。';
-      setStatus('err', '未找到 #offer 片段');
-      return;
+    var fromUrl = offerFromLocation();
+    if (fromUrl) { startWithOffer(fromUrl); return; }
+    $('offer-info').textContent = 'URL 中没有 #offer 片段。可以在下面的输入框里粘贴配对链接，或用 ' +
+      '/debug#offer=<base64> 打开本页面。';
+    setStatus('err', '未找到 #offer 片段');
+    $('offer-input').focus();
+  }
+
+  function startWithOffer(offerJson) {
+    offer = offerJson;
+    if (ws) {
+      try { ws.close(); } catch (e) {}
+      ws = null;
     }
+    if (helloTimer) { clearInterval(helloTimer); helloTimer = null; }
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    open = false;
+    sharedKey = null;
+    keyPair = null;
+    pending = [];
     $('offer-info').textContent = 'serverId=' + offer.serverId + ' · relay=' + offer.relay.endpoint +
       (offer.relay.useTls ? ' (TLS)' : '') + ' · daemonKey=' + offer.daemonPublicKeyB64;
 
@@ -293,7 +353,16 @@
     open = true;
     if (helloTimer) { clearInterval(helloTimer); helloTimer = null; }
     setStatus('ok', 'E2EE 通道已建立' + (binaryCiphertext ? '（binaryCiphertext）' : ''));
-    log('E2EE 通道已建立，可以发送 session 消息');
+    log('E2EE 通道已建立，发送 hello 建立会话');
+    // The daemon rejects session messages that arrive before its client hello
+    // (code 4002), so the hello has to go out first.
+    send(JSON.stringify({
+      type: 'hello',
+      clientId: clientId,
+      clientType: 'browser',
+      protocolVersion: 1,
+      appVersion: 'relay-debug-console'
+    }));
     for (var i = 0; i < pending.length; i++) sendEncrypted(pending[i]);
     pending = [];
     startHeartbeat();
@@ -384,6 +453,8 @@
         return JSON.stringify(makeRequest('get_providers_snapshot_request', { cwd: '/' }));
       case 'config':
         return JSON.stringify(makeRequest('get_daemon_config_request'));
+      case 'ping':
+        return JSON.stringify({ type: 'ping' });
       case 'heartbeat':
         return JSON.stringify({
           type: 'session',
@@ -411,9 +482,24 @@
   document.querySelectorAll('[data-tpl]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       $('out').value = template(btn.getAttribute('data-tpl'));
+      sendConsole();
     });
   });
   $('send').addEventListener('click', sendConsole);
+  $('offer-connect').addEventListener('click', function () {
+    var parsed = decodeOffer($('offer-input').value);
+    if (!parsed) {
+      setStatus('err', '无法解析 offer，请检查粘贴的链接或 base64');
+      return;
+    }
+    startWithOffer(parsed);
+  });
+  $('offer-input').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') $('offer-connect').click();
+  });
+  $('clear-log').addEventListener('click', function () {
+    logEl().value = '';
+  });
 
   connect();
 })();

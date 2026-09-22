@@ -40,9 +40,12 @@ To refresh the embedded app from a sibling `../paseo` checkout, run
 rebuild.
 
 An embedded debug pairing console can be enabled at `/debug` by setting
-`PASEO_RELAY_DEBUG=true`; it parses the `#offer` fragment, connects to the
-relay's `/ws` endpoint as a `role=client`, and performs the Paseo E2EE
-handshake (NaCl box).
+`PASEO_RELAY_DEBUG=true`; it takes the offer from the `#offer` fragment or from a
+pasted pairing link, connects to the relay's `/ws` endpoint as a `role=client`,
+and performs the Paseo E2EE handshake (NaCl box). After the handshake it sends
+the client `hello` the daemon requires, then offers buttons for `fetch_agents`,
+`get_providers_snapshot`, `get_daemon_config`, `ping` and `heartbeat`.
+`client_heartbeat` is one-way, so only `ping` produces a reply.
 
 ## Configuration
 
