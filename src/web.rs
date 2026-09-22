@@ -7,8 +7,9 @@ const INDEX_HTML: &str = include_str!("web/index.html");
 const NACL_JS: &str = include_str!("web/nacl-fast.js");
 
 /// Built Paseo web app, vendored into the binary so a single relay artifact
-/// can also serve the pairing UI. Regenerate with `scripts/vendor-web-ui.sh`.
-static WEB_UI: Dir = include_dir!("$CARGO_MANIFEST_DIR/web-ui");
+/// can also serve the pairing UI. `build.rs` runs the export in place when
+/// `vendor/paseo/packages/app/dist` has none yet.
+static WEB_UI: Dir = include_dir!("$CARGO_MANIFEST_DIR/vendor/paseo/packages/app/dist");
 
 /// Embedded debug pairing console. Consumes the `#offer=` URL fragment in the
 /// browser, connects to the relay's own `/ws` endpoint as a client, and runs

@@ -15,6 +15,9 @@ cargo build --release
 cargo test
 ```
 
+构建过程会内嵌 Paseo Web App，因此需要先检出 `vendor/paseo` 子模块，详见
+[Web UI](#web-ui)。
+
 ## 运行
 
 ```sh
@@ -26,17 +29,18 @@ WebSocket 端点：`GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 
 ## Web UI
 
-中继二进制内嵌了构建好的 Paseo Web App（保存在 `web-ui/` 目录中），并以
-SPA fallback 方式在 `/` 提供，因此分发时只需一个二进制文件。可以直接打开
-offer 链接：
+中继二进制内嵌了构建好的 Paseo Web App，并以 SPA fallback 方式在 `/` 提供，
+因此分发时只需一个二进制文件。内嵌的就是 `vendor/paseo/packages/app/dist`
+这一份产物，`build.rs` 会自行准备它：依赖缺失时先执行 `npm ci` 安装子模块依赖，
+该目录里还没有导出时再调用应用自带的导出命令
+`npm run build:web --workspace=@getpaseo/app`。因此刚检出后的第一次构建需要几分钟
+并且需要网络；`cargo build -vv` 可以看到 npm 的输出。可以直接打开 offer 链接：
 
 ```text
 http://<中继地址>/#offer=<base64-offer>
 ```
 
-要刷新内嵌应用，请运行 `scripts/vendor-web-ui.sh`（或将导出目录作为参数传入），
-然后重新构建。脚本默认从 `vendor/paseo` 子模块读取应用导出，若该处没有构建产物，则回退到
-已构建的相邻 `../paseo` 检出。
+设置 `PASEO_RELAY_WEB_UI_REBUILD=true` 可以在 `dist` 已有导出时也重新执行一次导出。
 
 `vendor/paseo` 子模块固定在 `v0.8.0` 这个 tag（提交 `b8e2467`）。克隆本项目时
 请加 `--recurse-submodules`，或执行 `git submodule update --init vendor/paseo`。要更新版本，

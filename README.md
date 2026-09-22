@@ -16,6 +16,9 @@ cargo build --release
 cargo test
 ```
 
+The build embeds the Paseo web app, so it needs the `vendor/paseo` submodule
+checked out; see [Web UI](#web-ui).
+
 ## Run
 
 ```sh
@@ -27,17 +30,21 @@ Operations: `GET /health`, `GET /ready`, `GET /metrics` (Prometheus text).
 
 ## Web UI
 
-The relay binary embeds the built Paseo web app (vendored under `web-ui/`) and
-serves it at `/` with SPA fallback, so distribution stays a single binary. Open
-an offer link directly:
+The relay binary embeds the built Paseo web app and serves it at `/` with SPA
+fallback, so distribution stays a single binary. The app is embedded from
+`vendor/paseo/packages/app/dist`, which `build.rs` prepares on its own: it
+installs the submodule's dependencies (`npm ci`) when they are missing, then runs
+the app's own export command, `npm run build:web --workspace=@getpaseo/app`,
+whenever that directory holds no export yet. The first build after a fresh
+checkout therefore takes a few minutes and needs network access; `cargo build
+-vv` shows the npm output. Open an offer link directly:
 
 ```text
 http://<relay-host>/#offer=<base64-offer>
 ```
 
-To refresh the embedded app, run `scripts/vendor-web-ui.sh` (or pass the export
-directory as an argument), then rebuild. The script reads the app export from the
-`vendor/paseo` submodule, falling back to a prebuilt sibling `../paseo` checkout.
+Set `PASEO_RELAY_WEB_UI_REBUILD=true` to re-run the export even when `dist`
+already holds one.
 
 The `vendor/paseo` submodule is pinned to tag `v0.8.0` (commit `b8e2467`). Clone
 the project with `--recurse-submodules`, or run
