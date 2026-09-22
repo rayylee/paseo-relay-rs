@@ -1,0 +1,3 @@
+[submodule "paseo"]
+       path = vendor/paseo
+       url = https://github.com/getpaseo/paseo
