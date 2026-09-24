@@ -258,6 +258,7 @@ async fn run(
             }
             Step::ReservationTimeout => {
                 // Active slot exceeded the delivery deadline: shed the slow consumer.
+                tracing::warn!("closing slow consumer: delivery deadline exceeded");
                 Metrics::inc(&state.metrics.delivery_timeouts);
                 Metrics::inc(&state.metrics.slow_consumer_disconnects);
                 let _ = state.destination.send(SocketMsg::Close {
@@ -380,6 +381,7 @@ impl WriterState {
                         self.queued.push_back(Queued::Control { payload, deadline });
                         true
                     } else {
+                        tracing::warn!("closing slow consumer: control queue full");
                         Metrics::inc(&self.metrics.slow_consumer_disconnects);
                         let _ = self.destination.send(SocketMsg::Close {
                             code: 1013,
@@ -440,6 +442,7 @@ impl WriterState {
                 Queued::Control { payload, deadline } => {
                     self.queued_control_bytes -= payload.len();
                     if Instant::now() >= deadline {
+                        tracing::warn!("closing slow consumer: queued control deadline exceeded");
                         Metrics::inc(&self.metrics.delivery_timeouts);
                         Metrics::inc(&self.metrics.slow_consumer_disconnects);
                         let _ = self.destination.send(SocketMsg::Close {

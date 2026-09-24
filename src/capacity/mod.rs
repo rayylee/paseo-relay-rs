@@ -611,11 +611,27 @@ impl CapacityState {
         }
         if self.pressure.is_some() && memory <= recovery {
             self.pressure = None;
+            tracing::info!(memory, recovery, "memory pressure cleared");
             return;
         }
         if memory >= self.watermark as u64 || self.pressure.is_some() {
+            let entering = self.pressure.is_none();
+            if entering {
+                tracing::warn!(
+                    memory,
+                    watermark = self.watermark,
+                    "entering memory pressure"
+                );
+            }
             let batch = self.pressure_batch(memory, recovery);
             let victims = self.shed_candidates(batch);
+            if victims > 0 {
+                tracing::warn!(
+                    memory,
+                    victims,
+                    "shedding connections under memory pressure"
+                );
+            }
             self.pressure = Some(PressureState {
                 memory,
                 victims,

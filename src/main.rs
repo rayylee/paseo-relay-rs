@@ -2,17 +2,12 @@ use std::sync::Arc;
 
 use paseo_relay::config::Config;
 use paseo_relay::drain::Drain;
+use paseo_relay::logging;
 use paseo_relay::metrics::Metrics;
 use paseo_relay::node::{self, NodeOptions};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
     let config = match Config::load_from_env() {
         Ok(config) => config,
         Err(message) => {
@@ -20,6 +15,19 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    // `PASEO_RELAY_DEBUG` also raises the fallback log level so the debug
+    // pairing console run is easier to follow. `RUST_LOG` still wins.
+    logging::init(if config.debug { "debug" } else { "info" });
+
+    tracing::info!(
+        host = %config.host,
+        port = config.port,
+        max_connections = config.max_connections,
+        memory_watermark_bytes = config.memory_watermark_bytes,
+        debug = config.debug,
+        "starting paseo-relay"
+    );
 
     let drain = Arc::new(Drain::new(config.drain));
     let metrics = Arc::new(Metrics::default());
@@ -34,7 +42,7 @@ async fn main() {
     {
         Ok(node) => node,
         Err(error) => {
-            eprintln!("failed to bind listener: {error}");
+            tracing::error!("failed to bind listener: {error}");
             std::process::exit(1);
         }
     };

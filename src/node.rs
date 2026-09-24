@@ -158,7 +158,7 @@ async fn supervisor_loop(
             return;
         }
 
-        tracing::error!("supervisor: restarting capacity + listener");
+        tracing::warn!("supervisor: restarting capacity + listener");
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         listener = loop {
@@ -174,6 +174,7 @@ async fn supervisor_loop(
             }
         };
         configure_listener(&listener, &options.config);
+        tracing::info!("supervisor: listener rebound on {local_addr}");
 
         generation_cancel = root_cancel.child_token();
         let (next_state, next_done) = build_generation(&options, generation_cancel.clone());
@@ -196,7 +197,10 @@ async fn ws_handler(
     let query = request.uri().query().unwrap_or("");
     let connection = match Connection::from_query(query) {
         Ok(connection) => connection,
-        Err(message) => return (StatusCode::BAD_REQUEST, message).into_response(),
+        Err(message) => {
+            tracing::debug!(reason = message, "rejecting WebSocket upgrade");
+            return (StatusCode::BAD_REQUEST, message).into_response();
+        }
     };
 
     let capacity_token = match state.capacity.admit_connection().await {
@@ -204,6 +208,12 @@ async fn ws_handler(
         Err(error) => {
             Metrics::inc(&state.metrics.connection_rejections);
             let (status, message) = socket::admission_rejection(error);
+            tracing::warn!(
+                server_id = %connection.server_id,
+                status,
+                reason = message,
+                "rejecting WebSocket upgrade"
+            );
             return (
                 StatusCode::from_u16(status).unwrap_or(StatusCode::SERVICE_UNAVAILABLE),
                 message,
@@ -220,9 +230,20 @@ async fn ws_handler(
         RouteResult::Local { owner, reservation } => (owner, reservation),
         RouteResult::Unavailable => {
             state.capacity.release_connection(capacity_token);
+            tracing::warn!(
+                server_id = %connection.server_id,
+                "rejecting WebSocket upgrade: session unavailable"
+            );
             return (StatusCode::SERVICE_UNAVAILABLE, "unavailable").into_response();
         }
     };
+
+    tracing::info!(
+        server_id = %connection.server_id,
+        role = ?connection.role,
+        connection_id = %connection.connection_id,
+        "WebSocket upgrade accepted"
+    );
 
     let max_payload = if connection.is_control() {
         crate::protocol::MAXIMUM_CONTROL_PAYLOAD_BYTES

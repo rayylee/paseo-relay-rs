@@ -4,6 +4,7 @@ pub mod connection;
 pub mod delivery;
 pub mod drain;
 pub mod handshake;
+pub mod logging;
 pub mod metrics;
 pub mod node;
 pub mod operations;

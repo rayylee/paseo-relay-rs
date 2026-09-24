@@ -28,6 +28,9 @@ PASEO_RELAY_PORT=4000 ./target/release/paseo-relay
 WebSocket endpoint: `GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 Operations: `GET /health`, `GET /ready`, `GET /metrics` (Prometheus text).
 
+Logs go to stderr. Verbosity follows `RUST_LOG`; the fallback is `info`, or
+`debug` when `PASEO_RELAY_DEBUG=true`.
+
 ## Web UI
 
 The relay binary embeds the built Paseo web app and serves it at `/` with SPA

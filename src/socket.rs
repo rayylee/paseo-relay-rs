@@ -45,6 +45,7 @@ struct SocketGuard {
 
 impl Drop for SocketGuard {
     fn drop(&mut self) {
+        tracing::debug!(socket_id = self.socket_id, "socket closed");
         self.owner.detach(self.socket_id);
         self.state.capacity.release_connection(self.capacity_token);
     }
@@ -67,6 +68,7 @@ pub async fn handle_socket(websocket: WebSocket, attached: Attached, state: Arc<
         .await
         .is_err()
     {
+        tracing::debug!(socket_id, "socket capacity attach failed");
         let mut websocket = websocket;
         let _ = close(&mut websocket, 1012, "Session expired").await;
         state.capacity.release_connection(attached.capacity_token);
@@ -98,12 +100,20 @@ pub async fn handle_socket(websocket: WebSocket, attached: Attached, state: Arc<
         .await
         .is_err()
     {
+        tracing::debug!(socket_id, "socket owner attach failed");
         let mut websocket = websocket;
         let _ = close(&mut websocket, 1012, "Session expired").await;
         drop(writer_guard);
         drop(guard);
         return;
     }
+
+    tracing::debug!(
+        socket_id,
+        server_id = %attached.connection.server_id,
+        connection_id = %attached.connection.connection_id,
+        "socket attached"
+    );
 
     let (sink, stream) = websocket.split();
     run(
@@ -257,6 +267,12 @@ impl SocketTask {
         self.state.metrics.observe_frame(payload_bytes);
 
         if payload_bytes > self.max_payload() {
+            tracing::debug!(
+                socket_id = self.socket_id,
+                payload_bytes,
+                limit = self.max_payload(),
+                "closing socket: frame too large"
+            );
             let _ = close_sink(&mut self.sink, 1009, "Frame too large").await;
             return false;
         }
@@ -273,6 +289,11 @@ impl SocketTask {
         {
             Ok(token) => token,
             Err(_) => {
+                tracing::warn!(
+                    socket_id = self.socket_id,
+                    payload_bytes,
+                    "closing socket: relay ingress capacity"
+                );
                 let _ = close_sink(&mut self.sink, 1013, "Relay ingress capacity").await;
                 return false;
             }
@@ -291,6 +312,11 @@ impl SocketTask {
                     self.state.metrics.observe_handshake(true, handshake_type);
                 }
                 HandshakeResult::Reject(handshake_type) => {
+                    tracing::debug!(
+                        socket_id = self.socket_id,
+                        handshake_type = handshake_type.as_str(),
+                        "closing socket: invalid handshake key"
+                    );
                     self.state.metrics.observe_handshake(false, handshake_type);
                     self.state.capacity.finish_message(token);
                     let _ = close_sink(&mut self.sink, 1008, "Invalid handshake key").await;
@@ -369,6 +395,11 @@ impl SocketTask {
         {
             Ok(token) => token,
             Err(_) => {
+                tracing::warn!(
+                    socket_id = self.socket_id,
+                    payload_bytes,
+                    "closing control socket: relay ingress capacity"
+                );
                 let _ = close_sink(&mut self.sink, 1013, "Relay ingress capacity").await;
                 return false;
             }

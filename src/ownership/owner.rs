@@ -178,6 +178,7 @@ struct OwnerState {
 }
 
 pub fn spawn(server_id: String, owners: Arc<DashMap<String, OwnerHandle>>) -> OwnerHandle {
+    tracing::debug!(server_id = %server_id, "owner spawned");
     let (sender, receiver) = mpsc::unbounded_channel();
     let handle = OwnerHandle {
         sender: sender.clone(),
@@ -204,6 +205,7 @@ async fn run(mut state: OwnerState, mut receiver: mpsc::UnboundedReceiver<Msg>) 
             break;
         }
     }
+    tracing::debug!(server_id = %state.server_id, "owner stopped");
     // Unregister; guard against a newer owner having already taken the slot.
     state.owners.remove_if(&state.server_id, |_key, handle| {
         handle.sender.same_channel(&state.sender)
