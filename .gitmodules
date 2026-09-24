@@ -1,4 +1,4 @@
 [submodule "vendor/paseo"]
        path = vendor/paseo
        url = https://github.com/getpaseo/paseo
-       branch = v0.9.0
+       branch = v0.9.1
