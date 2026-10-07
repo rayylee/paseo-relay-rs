@@ -3,7 +3,11 @@ name = "paseo-relay"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+readme = "README.md"
 description = "Single-node, protocol-compatible WebSocket relay for Paseo."
+repository = "https://github.com/rayylee/paseo-relay-rs"
+homepage = "https://github.com/rayylee/paseo-relay-rs"
+documentation = "https://github.com/rayylee/paseo-relay-rs"
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
