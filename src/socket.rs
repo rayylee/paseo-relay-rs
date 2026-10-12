@@ -17,8 +17,7 @@ use crate::node::AppState;
 use crate::ownership::owner::{Destinations, OwnerError, OwnerHandle};
 use crate::protocol;
 
-/// Messages other components push at a socket task (the Elixir
-/// `websocket_info` surface).
+/// Messages other components push at a socket task.
 pub enum SocketMsg {
     /// Forwarded frame from a writer.
     Frame { message: Message },
@@ -35,7 +34,7 @@ pub enum SocketMsg {
 }
 
 /// Detaches from the owner and releases the capacity slot when the socket task
-/// exits by any path (the `Process.monitor`/`terminate` analog).
+/// exits by any path.
 struct SocketGuard {
     socket_id: u64,
     owner: OwnerHandle,

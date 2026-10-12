@@ -8,7 +8,7 @@ use writer::{WriteError, WriterHandle};
 
 /// Deliver one payload to every destination writer concurrently. Succeeds when
 /// at least one destination accepted the frame; with no destinations the frame
-/// is dropped successfully (matching the Elixir relay). Each writer owns the
+/// is dropped successfully. Each writer owns the
 /// deadline and must be allowed to observe it, so every task is awaited.
 pub async fn deliver(
     writers: Vec<WriterHandle>,

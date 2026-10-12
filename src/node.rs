@@ -55,7 +55,7 @@ impl Node {
 /// Bind the listener and run the supervisor loop: each generation is one
 /// capacity actor plus one axum listener under a shared child token. When the
 /// capacity actor dies (crash or wedged-mutation cancel), the listener is torn
-/// down with it and both restart — the `rest_for_one` analog.
+/// down with it and both restart.
 pub async fn start(options: NodeOptions) -> std::io::Result<Node> {
     let listener = TcpListener::bind((options.config.host, options.config.port)).await?;
     configure_listener(&listener, &options.config);

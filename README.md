@@ -1,12 +1,12 @@
 # paseo-relay-rs
 
-Single-node, protocol-compatible rewrite of [paseo-relay](https://github.com/getpaseo/paseo-relay) in
-Rust (tokio + axum), implementing the plan in `doc/REWRITE.md`.
+Single-node [Paseo](https://github.com/getpaseo/paseo) relay in Rust (tokio + axum),
+compatible with the Paseo relay WebSocket protocol.
 
 Daemons and clients meet by `serverId`; frames are end-to-end encrypted by the
 Paseo protocol, so the relay never sees content. Only the **v2** protocol is
 served — `v=1` (or a missing `v`) is rejected with `400 Invalid protocol
-version`. Distributed ownership (Syn/cluster/reroute) and provider adapters
+version`. Distributed ownership (cluster discovery/reroute) and provider adapters
 are intentionally out of scope.
 
 ## Build & test
@@ -90,7 +90,7 @@ Every stateful component is a tokio actor (task + channel + oneshot replies):
 - **Capacity** (`src/capacity/`) — serialized resource ledger: connection
   admission, weighted ingress budget, memory-watermark shedding. A wedged
   mutation cancels the runtime token; the supervisor loop in `src/node.rs`
-  restarts capacity + listener together (`rest_for_one` analog).
+  restarts capacity + listener together.
 - **Ownership/Owner** (`src/ownership/`) — one owner task per `serverId` in a
   `DashMap`: v2 routing table (control/data/clients), connection replacement
   (`1008`), disconnect cascades (`1001`/`1012`), attach-waiters with control
@@ -104,4 +104,4 @@ Every stateful component is a tokio actor (task + channel + oneshot replies):
   client frames (`1008 Invalid handshake key`), fail-closed guards that detach
   from the owner and release capacity on any exit path.
 
-Close codes match the Elixir implementation; see section 2.9 of REWRITE.md.
+Close codes follow the Paseo relay protocol.

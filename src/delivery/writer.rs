@@ -50,7 +50,7 @@ pub struct WriterHandle {
 }
 
 /// Dropped when the destination socket task exits; wakes the writer so it can
-/// reject queued work (the `Process.monitor(destination)` analog).
+/// reject queued work.
 pub struct WriterDestinationGuard {
     _stop: oneshot::Sender<()>,
 }

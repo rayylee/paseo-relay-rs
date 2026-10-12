@@ -1,11 +1,11 @@
 # paseo-relay-rs
 
-[paseo-relay](https://github.com/getpaseo/paseo-relay) 的单节点、协议兼容的 Rust
-（tokio + axum）重写版本，实现了 `doc/REWRITE.md` 中的方案。
+[Paseo](https://github.com/getpaseo/paseo) 的单节点 Rust（tokio + axum）中继，
+兼容 Paseo relay 的 WebSocket 协议。
 
 守护进程与客户端通过 `serverId` 会合；帧由 Paseo 协议进行端到端加密，因此中继
 永远看不到内容。仅提供 **v2** 协议服务——`v=1`（或缺失 `v`）会被拒绝并返回
-`400 Invalid protocol version`。分布式所有权（Syn/集群/重路由）和 provider
+`400 Invalid protocol version`。分布式所有权（集群发现/重路由）和 provider
 适配器被有意排除在范围之外。
 
 ## 构建与测试
@@ -80,7 +80,7 @@ http://<中继地址>/#offer=<base64-offer>
 
 - **Capacity**（`src/capacity/`）——串行化的资源账本：连接准入、加权入站预算、
   内存水位分流。一次卡住的变更会取消运行时令牌；`src/node.rs` 中的监督循环会
-  将 capacity 与 listener 一起重启（类似 `rest_for_one`）。
+  将 capacity 与 listener 一起重启。
 - **Ownership/Owner**（`src/ownership/`）——每个 `serverId` 在 `DashMap` 中对应
   一个 owner 任务：v2 路由表（control/data/clients）、连接替换（`1008`）、断开级联
   （`1001`/`1012`）、带 control 提示（`1011`）的 attach 等待者、30 秒后的空闲自动注销。
@@ -91,4 +91,4 @@ http://<中继地址>/#offer=<base64-offer>
   （`delivering` 背压）、客户端帧的握手公钥校验（`1008 Invalid handshake key`）、
   在任何退出路径上都会从 owner 分离并释放容量的 fail-closed 守卫。
 
-关闭码与 Elixir 实现保持一致；见 REWRITE.md 第 2.9 节。
+关闭码遵循 Paseo relay 协议。

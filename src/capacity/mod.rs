@@ -91,7 +91,7 @@ enum Msg {
 
 /// Cheap-to-clone handle to the capacity actor. Mutations carry the configured
 /// timeout; a timeout cancels the runtime token, which restarts the capacity
-/// actor and listener together (the `rest_for_one` analog).
+/// actor and listener together.
 #[derive(Clone)]
 pub struct CapacityHandle {
     sender: mpsc::Sender<Msg>,
@@ -174,8 +174,7 @@ impl CapacityHandle {
     }
 
     /// Send a mutation and wait for the reply. On timeout the capacity actor
-    /// is considered wedged: cancel the runtime so the supervisor restarts it
-    /// (equivalent to `Process.exit(capacity, :kill)` under `rest_for_one`).
+    /// is considered wedged: cancel the runtime so the supervisor restarts it.
     async fn mutate<T>(
         &self,
         build: impl FnOnce(oneshot::Sender<T>) -> Msg,
