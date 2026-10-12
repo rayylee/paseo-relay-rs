@@ -42,7 +42,7 @@ http://<中继地址>/#offer=<base64-offer>
 
 设置 `PASEO_RELAY_WEB_UI_REBUILD=true` 可以在 `dist` 已有导出时也重新执行一次导出。
 
-`vendor/paseo` 子模块固定在 `v0.8.0` 这个 tag（提交 `b8e2467`）。克隆本项目时
+`vendor/paseo` 子模块固定在 `v0.11.2` 这个 tag（提交 `7595325`）。克隆本项目时
 请加 `--recurse-submodules`，或执行 `git submodule update --init vendor/paseo`。要更新版本，
 在子模块里检出新的 tag 并提交生成的 gitlink；`git submodule update --remote` 走的是
 默认分支，不是这个 pin。

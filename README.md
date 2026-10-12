@@ -49,7 +49,7 @@ http://<relay-host>/#offer=<base64-offer>
 Set `PASEO_RELAY_WEB_UI_REBUILD=true` to re-run the export even when `dist`
 already holds one.
 
-The `vendor/paseo` submodule is pinned to tag `v0.8.0` (commit `b8e2467`). Clone
+The `vendor/paseo` submodule is pinned to tag `v0.11.2` (commit `7595325`). Clone
 the project with `--recurse-submodules`, or run
 `git submodule update --init vendor/paseo`.
 Checking out a different tag there and committing the resulting gitlink is how the
