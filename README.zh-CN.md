@@ -15,7 +15,7 @@ cargo build --release
 cargo test
 ```
 
-构建过程会内嵌 Paseo Web App，因此需要先检出 `vendor/paseo` 子模块，详见
+构建过程会内嵌 Paseo Web App，因此首次构建需要 `git` 和网络，详见
 [Web UI](#web-ui)。
 
 ## 运行
@@ -31,8 +31,9 @@ WebSocket 端点：`GET /ws?serverId=X&role=server|client&v=2[&connectionId=Y]`
 
 中继二进制内嵌了构建好的 Paseo Web App，并以 SPA fallback 方式在 `/` 提供，
 因此分发时只需一个二进制文件。内嵌的就是 `vendor/paseo/packages/app/dist`
-这一份产物，`build.rs` 会自行准备它：依赖缺失时先执行 `npm ci` 安装子模块依赖，
-该目录里还没有导出时再调用应用自带的导出命令
+这一份产物，`build.rs` 会自行准备它：子模块未检出时先执行
+`git submodule update --init vendor/paseo` 自动下载，依赖缺失时执行 `npm ci`
+安装子模块依赖，该目录里还没有导出时再调用应用自带的导出命令
 `npm run build:web --workspace=@getpaseo/app`。因此刚检出后的第一次构建需要几分钟
 并且需要网络；`cargo build -vv` 可以看到 npm 的输出。可以直接打开 offer 链接：
 
@@ -42,8 +43,9 @@ http://<中继地址>/#offer=<base64-offer>
 
 设置 `PASEO_RELAY_WEB_UI_REBUILD=true` 可以在 `dist` 已有导出时也重新执行一次导出。
 
-`vendor/paseo` 子模块固定在 `v0.11.2` 这个 tag（提交 `7595325`）。克隆本项目时
-请加 `--recurse-submodules`，或执行 `git submodule update --init vendor/paseo`。要更新版本，
+`vendor/paseo` 子模块固定在某个具体提交上（用 `git submodule status` 查看）。
+`build.rs` 会在子模块缺失时自动检出，克隆时加 `--recurse-submodules` 或手动执行
+`git submodule update --init vendor/paseo` 都是可选的。要更新版本，
 在子模块里检出新的 tag 并提交生成的 gitlink；`git submodule update --remote` 走的是
 默认分支，不是这个 pin。
 

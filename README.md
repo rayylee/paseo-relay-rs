@@ -16,8 +16,8 @@ cargo build --release
 cargo test
 ```
 
-The build embeds the Paseo web app, so it needs the `vendor/paseo` submodule
-checked out; see [Web UI](#web-ui).
+The build embeds the Paseo web app, so the first build needs `git` and network
+access; see [Web UI](#web-ui).
 
 ## Run
 
@@ -35,8 +35,9 @@ Logs go to stderr. Verbosity follows `RUST_LOG`; the fallback is `info`, or
 
 The relay binary embeds the built Paseo web app and serves it at `/` with SPA
 fallback, so distribution stays a single binary. The app is embedded from
-`vendor/paseo/packages/app/dist`, which `build.rs` prepares on its own: it
-installs the submodule's dependencies (`npm ci`) when they are missing, then runs
+`vendor/paseo/packages/app/dist`, which `build.rs` prepares on its own: it checks
+out the `vendor/paseo` submodule when git left it missing or empty, installs the
+submodule's dependencies (`npm ci`) when they are missing, then runs
 the app's own export command, `npm run build:web --workspace=@getpaseo/app`,
 whenever that directory holds no export yet. The first build after a fresh
 checkout therefore takes a few minutes and needs network access; `cargo build
@@ -49,9 +50,10 @@ http://<relay-host>/#offer=<base64-offer>
 Set `PASEO_RELAY_WEB_UI_REBUILD=true` to re-run the export even when `dist`
 already holds one.
 
-The `vendor/paseo` submodule is pinned to tag `v0.11.2` (commit `7595325`). Clone
-the project with `--recurse-submodules`, or run
-`git submodule update --init vendor/paseo`.
+The `vendor/paseo` submodule is pinned to a specific commit, which `git
+submodule status` shows. `build.rs` checks it out automatically when it is
+missing, so cloning with `--recurse-submodules` or running
+`git submodule update --init vendor/paseo` is optional.
 Checking out a different tag there and committing the resulting gitlink is how the
 pin moves; `git submodule update --remote` follows the default branch instead.
 
